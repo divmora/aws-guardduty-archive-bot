@@ -33,3 +33,6 @@ config.yaml
 
 # Build output
 /aws-guardduty-archive-bot
+/bin/
+lambda.zip
+bootstrap

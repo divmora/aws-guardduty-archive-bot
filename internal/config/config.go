@@ -3,26 +3,26 @@ package config
 import (
 	"fmt"
 	"os"
-
-	"gopkg.in/yaml.v3"
+	"strings"
 )
 
 type Config struct {
-	Regions                []string `yaml:"regions"`
-	OrgAllResourcesViewArn string   `yaml:"org_all_resources_view_arn"`
+	Regions                []string
+	OrgAllResourcesViewArn string
 }
 
-// LoadConfig reads the YAML configuration file and parses it into a Config struct.
-func LoadConfig(filename string) (*Config, error) {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
+// LoadConfig reads configuration from environment variables.
+func LoadConfig() (*Config, error) {
 	var cfg Config
-	err = yaml.Unmarshal(data, &cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal yaml: %w", err)
+
+	regionsStr := os.Getenv("GUARDDUTY_REGIONS")
+	if regionsStr != "" {
+		cfg.Regions = strings.Split(regionsStr, ",")
+	}
+	cfg.OrgAllResourcesViewArn = os.Getenv("ORG_ALL_RESOURCES_VIEW_ARN")
+
+	if len(cfg.Regions) == 0 || cfg.OrgAllResourcesViewArn == "" {
+		return nil, fmt.Errorf("missing required env vars GUARDDUTY_REGIONS or ORG_ALL_RESOURCES_VIEW_ARN")
 	}
 
 	return &cfg, nil

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log/slog"
 	"os"
 
@@ -11,56 +10,52 @@ import (
 	"github.com/divmora/aws-guardduty-archive-bot/internal/rules"
 	"github.com/divmora/aws-guardduty-archive-bot/internal/utils"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	awsGuardduty "github.com/aws/aws-sdk-go-v2/service/guardduty"
 	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
-	"github.com/joho/godotenv"
 )
 
-func main() {
+// Event defines the payload for the Lambda invocation.
+type Event struct {
+	Approve bool `json:"approve"`
+}
+
+var Version = "dev"
+
+func HandleRequest(ctx context.Context, event Event) error {
 	// Configure structured JSON logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	// Define and parse CLI flags
-	approvePtr := flag.Bool("approve", false, "Set this flag to actually archive findings. Without it, the script runs in dry-run mode and only prints a summary.")
-	flag.Parse()
-	approve := *approvePtr
+	slog.Info("Starting AWS GuardDuty Archive Bot", "version", Version)
 
+	approve := event.Approve
 	if approve {
 		slog.Warn("Running in APPROVE mode. Findings will be archived.")
 	} else {
-		slog.Info("Running in DRY-RUN mode. No findings will be archived. Use --approve to execute.")
+		slog.Info("Running in DRY-RUN mode. No findings will be archived. Pass {\"approve\": true} to execute.")
 	}
 
-	// Load .env file if it exists
-	_ = godotenv.Load()
-	ctx := context.TODO()
-
-	// Load configuration from YAML
-	cfg, err := config.LoadConfig("config.yaml")
+	// Load configuration from Environment Variables
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
-	}
-
-	if len(cfg.Regions) == 0 {
-		slog.Error("no regions specified in config.yaml")
-		os.Exit(1)
+		return err
 	}
 
 	// Parse region from the Resource Explorer View ARN to create the reClient
 	parsedArn, err := utils.ParseArn(cfg.OrgAllResourcesViewArn)
 	if err != nil {
 		slog.Error("failed to parse org_all_resources_view_arn", "error", err)
-		os.Exit(1)
+		return err
 	}
 	reRegion := parsedArn.Region
 
 	reAwsCfg, err := awsConfig.LoadDefaultConfig(ctx, awsConfig.WithRegion(reRegion))
 	if err != nil {
 		slog.Error("unable to load SDK config for Resource Explorer", "region", reRegion, "error", err)
-		os.Exit(1)
+		return err
 	}
 	reClient := resourceexplorer2.NewFromConfig(reAwsCfg)
 
@@ -103,4 +98,9 @@ func main() {
 	}
 
 	slog.Info("All rules executed successfully across all configured regions.")
+	return nil
+}
+
+func main() {
+	lambda.Start(HandleRequest)
 }

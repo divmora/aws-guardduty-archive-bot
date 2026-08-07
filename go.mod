@@ -5,12 +5,11 @@ go 1.25
 toolchain go1.25.0
 
 require (
+	github.com/aws/aws-lambda-go v1.54.0
 	github.com/aws/aws-sdk-go-v2 v1.43.4
 	github.com/aws/aws-sdk-go-v2/config v1.32.35
 	github.com/aws/aws-sdk-go-v2/service/guardduty v1.85.4
 	github.com/aws/aws-sdk-go-v2/service/resourceexplorer2 v1.27.4
-	github.com/joho/godotenv v1.5.1
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

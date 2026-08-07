@@ -4,32 +4,61 @@ AWS GuardDuty Archive Bot is a utility that automates the archiving of specific 
 
 ## Configuration
 
-Configuration is managed via `config.yaml`. Example configuration:
+Configuration is managed via Environment Variables:
 
-```yaml
-regions:
-  - "ap-south-1"
-  - "us-east-1"
-  - "us-west-2"
-  - "ap-south-2"
-  - "ap-southeast-1"
+- `GUARDDUTY_REGIONS`: Comma-separated list of AWS regions to process (e.g. `ap-south-1,us-east-1,us-west-2`)
+- `ORG_ALL_RESOURCES_VIEW_ARN`: The ARN for your AWS Resource Explorer View
 
-org_all_resources_view_arn: "arn:aws:resource-explorer-2:ap-south-1:123456789012:view/org-all-resources/..."
+## IAM Permissions
+
+The Lambda function requires an execution role with the following least-privilege custom IAM policy. This grants permissions to read/archive GuardDuty findings and search Resource Explorer, alongside standard CloudWatch logging.
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "guardduty:ListDetectors",
+                "guardduty:ListFindings",
+                "guardduty:GetFindings",
+                "guardduty:ArchiveFindings"
+            ],
+            "Resource": "arn:aws:guardduty:*:*:detector/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "resource-explorer-2:Search"
+            ],
+            "Resource": "arn:aws:resource-explorer-2:*:*:view/*/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "arn:aws:logs:*:*:log-group:/aws/lambda/*"
+        }
+    ]
+}
 ```
 
 ## Running the Bot
 
 First, ensure your AWS credentials are appropriately configured in your environment (e.g. via `~/.aws/credentials` or standard AWS environment variables) and any required environment variables are set in a `.env` file.
 
-To run the bot:
+To run locally (simulating Lambda execution):
 
 ```bash
-go run main.go -config config.yaml
+go run ./cmd/lambda
 ```
 
 To build a binary:
 
 ```bash
-go build -o aws-guardduty-archive-bot
-./aws-guardduty-archive-bot -config config.yaml
+make build
 ```
