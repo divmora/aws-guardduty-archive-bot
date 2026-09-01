@@ -2,6 +2,7 @@
 
 [![Latest Release](https://img.shields.io/github/v/release/divmora/aws-guardduty-archive-bot?logo=github)](https://github.com/divmora/aws-guardduty-archive-bot/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/divmora/aws-guardduty-archive-bot)](go.mod)
+[![Documentation: DeepWiki](https://img.shields.io/badge/docs-DeepWiki-blue.svg)](https://deepwiki.com/divmora/aws-guardduty-archive-bot)
 [![CI/CD](https://github.com/divmora/aws-guardduty-archive-bot/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/divmora/aws-guardduty-archive-bot/actions)
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1-blue.svg)](https://github.com/divmora/.github/blob/main/LICENSING.md)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-green.svg)](SECURITY.md)
