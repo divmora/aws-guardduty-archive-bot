@@ -62,3 +62,14 @@ To build a binary:
 ```bash
 make build
 ```
+
+## License & Commercial Use
+
+This project is licensed under the **Business Source License 1.1 (BSL 1.1)**.
+
+- **Non-Production & Evaluation:** Free to use, modify, and test for non-production environments (local development, staging, QA, CI/CD pipelines, and proof-of-concept evaluation).
+- **Production & Commercial Use:** Deploying or executing in production environments or offering this software as a commercial/managed service requires a commercial license (EULA) from **DIVMORA Technologies**.
+- **Open Source Transition:** Each release automatically converts to the **Apache License, Version 2.0** three (3) years after its release date.
+
+For commercial licensing inquiries, enterprise support, or questions, please contact **licensing@divmora.com** or visit [divmora.com](https://divmora.com).
+
