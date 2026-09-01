@@ -1,0 +1,9 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "package-name": "aws-guardduty-archive-bot",
+      "include-component-in-tag": false
+    }
+  }
+}

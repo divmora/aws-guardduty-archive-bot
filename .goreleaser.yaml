@@ -1,0 +1,61 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: lambda
+    main: ./cmd/lambda
+    binary: bootstrap
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+
+  - id: cli
+    main: ./cmd/lambda
+    binary: aws-guardduty-archive-bot
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+
+archives:
+  - id: lambda-archive
+    builds:
+      - lambda
+    format: zip
+    name_template: "aws-guardduty-archive-bot-lambda_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - none*
+
+  - id: cli-archive
+    builds:
+      - cli
+    format: tar.gz
+    name_template: "aws-guardduty-archive-bot_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  disable: true
