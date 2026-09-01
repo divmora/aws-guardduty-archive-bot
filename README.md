@@ -93,7 +93,7 @@ The Lambda execution role requires the following least-privilege IAM policy to a
 ## Development & Building
 
 ### Prerequisites
-- **Go 1.23+**
+- **Go 1.25+**
 - **Make**
 - **Docker** (optional, for container builds)
 
