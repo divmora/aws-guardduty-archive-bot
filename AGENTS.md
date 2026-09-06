@@ -8,8 +8,9 @@ Welcome to the workspace-specific agent guidelines. These instructions apply to 
 
 This project follows standard Go conventions for serverless AWS Lambda tooling:
 
-- `cmd/lambda/main.go`: The Lambda entrypoint handler (`HandleRequest`). Manages initialization, structured logging, client creation per region, and sequentially dispatches execution to individual rules.
-- `internal/config/`: Configuration loading and validation from environment variables (`GUARDDUTY_REGIONS`, `ORG_ALL_RESOURCES_VIEW_ARN`).
+- `cmd/lambda/main.go`: The dual-mode entrypoint handler. Automatically detects whether it is running as an AWS Lambda function (`HandleRequest`) or a standalone CLI / container process (`runCLI`). Configures structured logging and delegates execution to `internal/runner`.
+- `internal/runner/`: The core rule execution engine (`runner.Run`). Manages client initialization per region, context cancellation, and sequentially dispatches execution to individual rules.
+- `internal/config/`: Configuration loading and validation from environment variables (`GUARDDUTY_REGIONS`, `ORG_ALL_RESOURCES_VIEW_ARN`) with support for CLI flag overrides and local `.env` files.
 - `internal/guardduty/`: AWS GuardDuty SDK v2 wrappers (Detector lookup, finding search/pagination, member account status, finding archival).
 - `internal/resourceexplorer/`: AWS Resource Explorer 2 SDK v2 client queries for cross-account resource cache lookups (e.g. EC2 instance status).
 - `internal/rules/`: Pluggable archival rule logic (e.g. `CloseByAccountRule`, `CheckOrphanInstancesRule`).

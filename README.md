@@ -28,7 +28,10 @@ The bot currently runs the following automated rules across configured AWS regio
 
 ## Execution Modes
 
-The bot provides built-in safety controls via the invocation event payload:
+The bot provides dual-mode execution: it automatically detects whether it is running as an **AWS Lambda function** or in **Standalone CLI / Container Mode** (local workstation, Docker, Kubernetes CronJob, ECS Fargate, CI/CD).
+
+### 1. AWS Lambda Mode
+Inside Lambda, safe execution is controlled via the JSON invocation event payload:
 
 - **Dry-Run Mode (Default)**:
   ```json
@@ -42,16 +45,37 @@ The bot provides built-in safety controls via the invocation event payload:
   ```
   Executes the archival action (`guardduty:ArchiveFindings`) for all qualifying findings.
 
+### 2. Standalone CLI / Container Mode
+Outside Lambda, the bot runs as a standard command-line utility with flag support:
+
+```bash
+# Dry-run inspection (default)
+aws-guardduty-archive-bot
+
+# Override regions and view ARN via CLI flags
+aws-guardduty-archive-bot --regions us-east-1,us-west-2 --view-arn arn:aws:resource-explorer-2:...
+
+# Approve & execute archival mutations
+aws-guardduty-archive-bot --approve
+
+# Output logs in JSON format
+aws-guardduty-archive-bot --json
+```
+
 ---
 
 ## Configuration
 
-Configuration is managed via Environment Variables:
+Configuration can be supplied via Environment Variables, a local `.env` file, or CLI flags (flags take precedence):
 
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `GUARDDUTY_REGIONS` | Comma-separated list of AWS regions to process | `us-east-1,us-west-2,ap-south-1` |
-| `ORG_ALL_RESOURCES_VIEW_ARN` | The ARN of the AWS Resource Explorer View for cross-account resource discovery | `arn:aws:resource-explorer-2:us-east-1:123456789012:view/all-resources/uuid` |
+| Parameter / Variable | CLI Flag | Description | Example |
+| :--- | :--- | :--- | :--- |
+| `GUARDDUTY_REGIONS` | `--regions` | Comma-separated list of AWS regions to process | `us-east-1,us-west-2,ap-south-1` |
+| `ORG_ALL_RESOURCES_VIEW_ARN` | `--view-arn` | The ARN of the AWS Resource Explorer View for cross-account resource discovery | `arn:aws:resource-explorer-2:us-east-1:123456789012:view/all-resources/uuid` |
+| N/A | `--approve` | Execute mutations (archives findings); default `false` (dry-run) | `--approve` |
+| N/A | `--json` | Emit structured logs in JSON format instead of human-readable text | `--json` |
+| N/A | `-v`, `--version` | Display version information and exit | `--version` |
+| N/A | `-h`, `--help` | Display command-line usage information | `--help` |
 
 ---
 
@@ -112,6 +136,12 @@ make dev-setup
 
 # Build local binary to bin/
 make build
+
+# Run locally in CLI dry-run mode
+make run-cli
+
+# Run locally in CLI approve mode
+make run-approve
 
 # Run unit tests
 make test

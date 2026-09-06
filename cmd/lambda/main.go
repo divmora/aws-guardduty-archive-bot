@@ -2,18 +2,17 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
+	"fmt"
 	"log/slog"
 	"os"
-
-	"github.com/divmora/aws-guardduty-archive-bot/internal/config"
-	"github.com/divmora/aws-guardduty-archive-bot/internal/guardduty"
-	"github.com/divmora/aws-guardduty-archive-bot/internal/rules"
-	"github.com/divmora/aws-guardduty-archive-bot/internal/utils"
+	"os/signal"
+	"syscall"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	awsConfig "github.com/aws/aws-sdk-go-v2/config"
-	awsGuardduty "github.com/aws/aws-sdk-go-v2/service/guardduty"
-	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
+	"github.com/divmora/aws-guardduty-archive-bot/internal/config"
+	"github.com/divmora/aws-guardduty-archive-bot/internal/runner"
 )
 
 // Event defines the payload for the Lambda invocation.
@@ -21,86 +20,92 @@ type Event struct {
 	Approve bool `json:"approve"`
 }
 
+// Version holds the application version, injected at build time via -ldflags.
 var Version = "dev"
 
+// isLambdaEnvironment detects if the process is running within an AWS Lambda environment.
+func isLambdaEnvironment() bool {
+	return os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" || os.Getenv("_LAMBDA_SERVER_PORT") != ""
+}
+
+// HandleRequest is the entrypoint handler for AWS Lambda invocations.
 func HandleRequest(ctx context.Context, event Event) error {
-	// Configure structured JSON logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	slog.Info("Starting AWS GuardDuty Archive Bot", "version", Version)
+	slog.Info("Starting AWS GuardDuty Archive Bot", "version", Version, "mode", "lambda")
 
-	approve := event.Approve
-	if approve {
-		slog.Warn("Running in APPROVE mode. Findings will be archived.")
-	} else {
-		slog.Info("Running in DRY-RUN mode. No findings will be archived. Pass {\"approve\": true} to execute.")
-	}
-
-	// Load configuration from Environment Variables
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
 		return err
 	}
 
-	// Parse region from the Resource Explorer View ARN to create the reClient
-	parsedArn, err := utils.ParseArn(cfg.OrgAllResourcesViewArn)
-	if err != nil {
-		slog.Error("failed to parse org_all_resources_view_arn", "error", err)
+	return runner.Run(ctx, event.Approve, cfg)
+}
+
+// runCLI parses command-line arguments and runs the bot in standalone CLI / container mode.
+func runCLI(ctx context.Context, args []string) error {
+	flagSet := flag.NewFlagSet("aws-guardduty-archive-bot", flag.ContinueOnError)
+
+	approve := flagSet.Bool("approve", false, "Execute archival mutations (default false: dry-run mode)")
+	regions := flagSet.String("regions", "", "Comma-separated list of AWS regions (overrides GUARDDUTY_REGIONS)")
+	viewArn := flagSet.String("view-arn", "", "Resource Explorer View ARN (overrides ORG_ALL_RESOURCES_VIEW_ARN)")
+	jsonLogs := flagSet.Bool("json", false, "Output logs in JSON format instead of readable text")
+	showVersion := flagSet.Bool("version", false, "Print version and exit")
+	flagSet.BoolVar(showVersion, "v", false, "Print version and exit (shorthand)")
+
+	flagSet.Usage = func() {
+		fmt.Fprintf(flagSet.Output(), "AWS GuardDuty Archive Bot (%s)\n\n", Version)
+		fmt.Fprintf(flagSet.Output(), "Usage:\n  aws-guardduty-archive-bot [flags]\n\nFlags:\n")
+		flagSet.PrintDefaults()
+		fmt.Fprintf(flagSet.Output(), "\nEnvironment Variables:\n")
+		fmt.Fprintf(flagSet.Output(), "  GUARDDUTY_REGIONS          Comma-separated list of AWS regions\n")
+		fmt.Fprintf(flagSet.Output(), "  ORG_ALL_RESOURCES_VIEW_ARN Resource Explorer View ARN\n")
+	}
+
+	if err := flagSet.Parse(args); err != nil {
 		return err
 	}
-	reRegion := parsedArn.Region
 
-	reAwsCfg, err := awsConfig.LoadDefaultConfig(ctx, awsConfig.WithRegion(reRegion))
+	if *showVersion {
+		fmt.Printf("aws-guardduty-archive-bot version %s\n", Version)
+		return nil
+	}
+
+	// Configure structured logger
+	var handler slog.Handler
+	if *jsonLogs {
+		handler = slog.NewJSONHandler(os.Stdout, nil)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
+	}
+	slog.SetDefault(slog.New(handler))
+
+	slog.Info("Starting AWS GuardDuty Archive Bot", "version", Version, "mode", "cli")
+
+	cfg, err := config.LoadConfigWithOverrides(*regions, *viewArn)
 	if err != nil {
-		slog.Error("unable to load SDK config for Resource Explorer", "region", reRegion, "error", err)
+		slog.Error("failed to load configuration", "error", err)
 		return err
 	}
-	reClient := resourceexplorer2.NewFromConfig(reAwsCfg)
 
-	// Loop over each GuardDuty region specified in the config
-	for _, region := range cfg.Regions {
-		slog.Info("Processing Region", "region", region)
-
-		// Load AWS configuration for the specific region
-		awsCfg, err := awsConfig.LoadDefaultConfig(ctx, awsConfig.WithRegion(region))
-		if err != nil {
-			slog.Error("unable to load SDK config", "region", region, "error", err)
-			continue
-		}
-
-		gdClient := awsGuardduty.NewFromConfig(awsCfg)
-
-		// Get Detector ID for the region
-		detectorId, err := guardduty.GetDetectorId(ctx, gdClient)
-		if err != nil {
-			slog.Error("failed to get detector ID", "region", region, "error", err)
-			continue
-		}
-		slog.Info("Using Detector ID", "detectorId", detectorId)
-
-		// --- Rule Engine Execution ---
-
-		// 1st Rule: Close all findings for disabled member accounts
-		slog.Info("Executing CloseByAccountRule", "region", region)
-		err = rules.ApplyCloseByAccountRule(ctx, gdClient, detectorId, approve)
-		if err != nil {
-			slog.Error("Error applying CloseByAccountRule", "region", region, "error", err)
-		}
-
-		// 2nd Rule: Find EC2 instances that no longer exist and print their details
-		slog.Info("Executing CheckOrphanInstancesRule", "region", region)
-		err = rules.CheckOrphanInstancesRule(ctx, gdClient, reClient, detectorId, cfg.OrgAllResourcesViewArn, approve)
-		if err != nil {
-			slog.Error("Error applying CheckOrphanInstancesRule", "region", region, "error", err)
-		}
-	}
-
-	slog.Info("All rules executed successfully across all configured regions.")
-	return nil
+	return runner.Run(ctx, *approve, cfg)
 }
 
 func main() {
-	lambda.Start(HandleRequest)
+	if isLambdaEnvironment() {
+		lambda.Start(HandleRequest)
+		return
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := runCLI(ctx, os.Args[1:]); err != nil {
+		if !errors.Is(err, flag.ErrHelp) {
+			slog.Error("CLI execution failed", "error", err)
+			os.Exit(1)
+		}
+	}
 }
