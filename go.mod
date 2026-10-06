@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-lambda-go v1.55.1
 	github.com/aws/aws-sdk-go-v2 v1.47.1
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
-	github.com/aws/aws-sdk-go-v2/service/guardduty v1.95.0
+	github.com/aws/aws-sdk-go-v2/service/guardduty v1.97.0
 	github.com/aws/aws-sdk-go-v2/service/resourceexplorer2 v1.33.1
 )
 
